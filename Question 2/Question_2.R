@@ -15,7 +15,8 @@ sessionInfo()
 # Load data
 adae <- pharmaverseadam::adae
 
-# Define severity order
+table(adae$AESEV)
+# Define severity level
 sev_levels <- c("MILD", "MODERATE", "SEVERE")
 
 # Count unique subjects per SOC x severity
@@ -25,15 +26,15 @@ ae_plot_df <- adae %>%
     !is.na(AESOC),
     !is.na(AESEV)
   ) %>%
-  mutate(
-    AESEV = toupper(trimws(AESEV))
-  ) %>%
-  filter(AESEV %in% sev_levels) %>%
+  # mutate(
+  #   AESEV = toupper(trimws(AESEV)) # optional, just in case of the poor data quality
+  # ) %>%
+  # filter(AESEV %in% sev_levels) %>% # optional, just in case of the poor data quality
   distinct(USUBJID, AESOC, AESEV) %>%
-  count(AESOC, AESEV, name = "n_subjects") %>%
-  complete(AESOC, AESEV = sev_levels, fill = list(n_subjects = 0))
+  count(AESOC, AESEV, name = "n_subjects") %>% # ensure only count once 
+  complete(AESOC, AESEV = sev_levels, fill = list(n_subjects = 0)) # ensure all level of AE exist for each SOC, even the existence of severe may not always be the case
 
-# ---- Order SOC by increasing total frequency ----
+# Order SOC by increasing total frequency
 soc_order_df <- ae_plot_df %>%
   group_by(AESOC) %>%
   summarise(total_subjects = sum(n_subjects), .groups = "drop") %>%
@@ -41,12 +42,13 @@ soc_order_df <- ae_plot_df %>%
 
 ae_plot_df <- ae_plot_df %>%
   left_join(soc_order_df, by = "AESOC") %>%
+  # sorting
   mutate(
     AESEV = factor(AESEV, levels = sev_levels),
     AESOC = factor(AESOC, levels = soc_order_df$AESOC)
   )
 
-# ---- Compute dynamic x-axis upper bound to match the example given----
+# Compute dynamic x-axis upper bound to match the example given
 x_max <- ae_plot_df %>%
   group_by(AESOC) %>%
   summarise(total_subjects = sum(n_subjects), .groups = "drop") %>%

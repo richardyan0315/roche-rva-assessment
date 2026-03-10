@@ -16,7 +16,7 @@ sessionInfo()
 adsl <- pharmaverseadam::adsl
 adae <- pharmaverseadam::adae
 
-# Do the initial table(adsl$) checking
+# Do the initial checking
 table(adsl$ACTARM) # checking the potential invalid ACTARM: noticed the existence of "Screen Failure"
 table(adsl$SAFFL)  # safe population flag
 
@@ -28,7 +28,7 @@ denom_tbl <- adsl %>%
   arrange(ACTARM != "Placebo", ACTARM)
 
 # do the initial checking
-table(adae$TRTEMFL)
+table(adae$TRTEMFL)  # Review Treatment Emergent Adverse Event (TEAE) flags
 
 # Extract TEAE records: System Organ Class (AESOC) and Preferred Term (AEDECOD) (unique by USUBJID)
 teae <- adae %>%
@@ -49,7 +49,7 @@ pt_counts <- teae %>%
 counts_all <- bind_rows(soc_counts, pt_counts)
 
 
-# Ensure every SOC/PT has a record for each treatment arm (fill zeros)
+# Ensure every SOC/PT has at least a record for each treatment arm (fill potential zeros)
 # All SOC and PT combinations (from adae), keep only SOCs with TEAE
 all_soc_pt <- adae %>%
   distinct(AESOC, AEDECOD) %>%

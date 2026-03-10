@@ -16,61 +16,58 @@ sessionInfo()
 adsl <- pharmaverseadam::adsl
 adae <- pharmaverseadam::adae
 
-# Perform initial data exploration
+# Perform initial data exploration of adsl
 table(adsl$ACTARM) # Check for invalid treatment arms (e.g., identifying "Screen Failure" subjects)
 table(adsl$SAFFL)  # Review the distribution of the Safety Population flag
 
-# ---- 3) Data Preparation: Define Denominator (ADSL) ----
-# Establish the foundational denominator (Safety Population) for percentage calculations
+# Filter the denominator records for percentage calculations
 adsl_saf <- adsl %>%
   filter(SAFFL == "Y", !is.na(ACTARM), ACTARM != "Screen Failure") %>%
   select(USUBJID, ACTARM) %>%
   # Relevel ACTARM factor to ensure "Placebo" appears as the first column in the final table
   mutate(ACTARM = fct_relevel(as.factor(ACTARM), "Placebo"))
 
-# ---- 4) Data Preparation: Extract Numerator (ADAE) ----
+# Perform initial data exploration of adae
 table(adae$TRTEMFL) # Review Treatment Emergent Adverse Event (TEAE) flags
 
 # Filter for valid TEAEs among patients with an assigned treatment arm
 adae_teae <- adae %>%
   filter(TRTEMFL == "Y", !is.na(ACTARM))
 
-# ---- 5) Core Transformation: Construct Wide-Format Dichotomous Variables ----
-# To leverage gtsummary's native counting, we create a TRUE/FALSE flag for every level of AE
+# Construct Wide-Format Dichotomous Variables
+# create a TRUE/FALSE flag for every level of AE
 
-# 5.1 Extract the "Overall" occurrence of any TEAE per subject
+# Extract the "Overall" occurrence of any TEAE per subject
 df_overall <- adae_teae %>%
   distinct(USUBJID) %>%
   mutate(term = "Treatment Emergent Adverse Events", type = "Overall", sort1 = 0, sort2 = "")
 
-# 5.2 Extract the occurrence of AEs at the System Organ Class (SOC) level per subject
+# Extract the occurrence of AEs at the System Organ Class (SOC) level per subject
 df_soc <- adae_teae %>%
   distinct(USUBJID, AESOC) %>%
   mutate(term = AESOC, type = "SOC", sort1 = 1, sort2 = AESOC)
 
-# 5.3 Extract the occurrence of AEs at the Preferred Term (PT) level per subject
+# Extract the occurrence of AEs at the Preferred Term (PT) level per subject
 df_pt <- adae_teae %>%
   distinct(USUBJID, AESOC, AEDECOD) %>%
   mutate(term = AEDECOD, type = "PT", sort1 = 1, sort2 = AESOC)
 
-# 5.4 Combine all levels and create a comprehensive data dictionary
+# Combine all levels and create a comprehensive data dictionary
 df_all_terms <- bind_rows(df_overall, df_soc, df_pt) %>% mutate(val = TRUE)
 
 # Define the data dictionary to control precise sorting and indentation
 term_dict <- df_all_terms %>%
   distinct(type, term, sort1, sort2) %>%
-  # Core sorting logic: Overall first (0) -> Alphabetical by SOC -> SOC summary precedes PTs -> Alphabetical by PT
+  # Sorting by: Overall first (0) -> Alphabetical by SOC -> SOC summary precedes PTs -> Alphabetical by PT
   arrange(sort1, sort2, type == "PT", term) %>%
   mutate(
     # Generate sequential dummy column names (v_1, v_2...) representing the exact display order
     col_name = paste0("v_", row_number()), 
-    # Apply four Unicode non-breaking spaces (\U00A0) for stable HTML/RTF indentation on PT rows
+    # Apply four Unicode non-breaking spaces (\U00A0) for stable HTML indentation on PT rows
     label = ifelse(type == "PT", paste0("\U00A0\U00A0\U00A0\U00A0", term), term)
   )
 
-# print(term_dict, n = 100) # Optional: verify the dictionary logic
-
-# 5.5 Pivot to wide format and merge with the ADSL denominator
+# Pivot to wide format and merge with the ADSL denominator
 adsl_analysis <- df_all_terms %>%
   left_join(term_dict, by = c("type", "term", "sort1", "sort2")) %>%
   distinct(USUBJID, col_name, val) %>%
@@ -83,7 +80,7 @@ adsl_analysis <- df_all_terms %>%
   # Enforce strictly ordered columns based on the dictionary to maintain the SOC/PT hierarchy
   select(USUBJID, ACTARM, all_of(term_dict$col_name))
 
-# ---- 6) Table Generation: Render using gtsummary ----
+# Table Generation: Render using gtsummary
 # Map the auto-generated column names (v_1, v_2...) back to their indented descriptive labels
 var_labels <- setNames(as.list(term_dict$label), term_dict$col_name)
 
@@ -105,7 +102,6 @@ final_gtsummary <- adsl_analysis %>%
   modify_column_alignment(columns = all_stat_cols(), align = "center") %>%
   as_gt() # Convert to gt object for final rendering and saving
 
-# ---- 7) Export Output ----
 # Save the resulting table as an HTML file
 out_file <- "./Question 1/q1-teae_summary_table_gtsummary.html"
 gtsave(final_gtsummary, out_file)
